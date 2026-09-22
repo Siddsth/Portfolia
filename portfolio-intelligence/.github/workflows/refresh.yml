@@ -1,0 +1,52 @@
+name: Refresh Portfolio Intelligence
+
+on:
+  schedule:
+    # Daily at 22:30 UTC (after US market close). Adjust cadence as needed —
+    # weekly (e.g. "30 22 * * 1") is plenty if you want to conserve free
+    # LLM-call quota once step 4 (Q&A regeneration) is wired in below.
+    - cron: "30 22 * * *"
+  workflow_dispatch: {} # allows manual "Run workflow" trigger from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore price cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: price-cache-${{ github.run_id }}
+          restore-keys: price-cache-
+
+      - name: Compute risk snapshot
+        run: python scripts/compute_snapshot.py
+
+      # Step 3-4 (filing ingestion + Q&A regeneration) land here once built:
+      # - name: Refresh filing chunks
+      #   run: python scripts/ingest_filings.py
+      # - name: Regenerate Q&A insights
+      #   env:
+      #     GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      #   run: python scripts/generate_insights.py
+
+      - name: Commit updated output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/ data/cache/sectors.parquet
+          git diff --staged --quiet || git commit -m "chore: refresh portfolio intelligence snapshot"
+          git push

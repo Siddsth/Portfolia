@@ -1,0 +1,5 @@
+data/cache/*.parquet
+!data/cache/sectors.parquet
+__pycache__/
+*.pyc
+.venv/
